@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 
 class BaseConv(nn.Module):
-    def __init__(self, in_channles, out_channels, kernel_size, stride, padding,):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding,):
         super().__init__()
-        self.conv = nn.Conv2d(in_channles, out_channels, kernel_size, stride, padding, bias=False)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False)
         self.bn = nn.BatchNorm2d(out_channels)
         self.activate = nn.LeakyReLU()
 
@@ -47,7 +47,7 @@ class ResBlock(nn.Module):
 def make_group_of_conv(in_channels,num_blocks):
     layers=[
         BaseConv(
-            in_channles=in_channels,
+            in_channels=in_channels,
             out_channels=in_channels*2,
             kernel_size=3,
             stride=2,
@@ -64,7 +64,7 @@ class Darknet53(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.stem=BaseConv(in_channles=3,out_channels=32,kernel_size=3,stride=2,padding=1)
+        self.stem=BaseConv(in_channels=3,out_channels=32,kernel_size=3,stride=2,padding=1)
         
         self.stage1 = make_group_of_conv(in_channels=32,num_blocks=1)   
         self.stage2 = make_group_of_conv(in_channels=64,num_blocks=2)
@@ -194,3 +194,68 @@ class YoloFPN(nn.Module):
 
         return x3_out,x4_out,x5
         
+
+
+
+class YOLOx(nn.Module):
+    def __init__(self,num_classes=80):
+        super().__init__()
+
+        #Instantiate the Darknet53 backbone (640×640×3 -> 20×20×1024)
+        self.backbone=Darknet53()
+
+        #Instantiate the SPP block (Attaches to the deepest layer: 1024 channels)
+        self.spp=SPP(in_channels=1024,out_channels=1024)
+
+        self.fpn=YoloFPN(in_channels=(256,512,1024),out_channels=256)
+
+        self.head_small = DecopledHead(num_classes, 256)
+        self.head_medium = DecopledHead(num_classes, 256)
+        self.head_large = DecopledHead(num_classes, 256)
+
+
+
+    def forward(self,x):
+
+        out_feature_1,out_feature_2,out_feature_3=self.backbone(x)
+        
+        #Pass the deepest map (out_3) through the SPP block to get global context        
+        out_feature_3 = self.spp(out_feature_3)
+
+        # Pass the features through FPN
+        fpn_small, fpn_medium, fpn_large = self.fpn(out_feature_1, out_feature_2, out_feature_3)
+        
+        # cls_small, reg_small, obj_small = self.head_small(fpn_small)
+        # cls_medium, reg_medium, obj_medium = self.head_medium(fpn_medium)
+        # cls_large, reg_large, obj_large = self.head_large(fpn_large)
+
+        pred_small = self.head_small(fpn_small)
+        pred_medium = self.head_medium(fpn_medium)
+        pred_large = self.head_large(fpn_large)
+
+        return pred_small, pred_medium, pred_large
+
+        
+if __name__ == "__main__":
+    # 1. Create a fake image tensor (Batch Size of 1, 3 Color Channels, 640x640 resolution)
+    dummy_image = torch.randn(1, 3, 640, 640)
+    
+    # 2. Instantiate your shiny new model!
+    model = YOLOx(num_classes=80)
+    
+    # 3. Pass the fake image through the model
+    print("Feeding image to YOLOX...")
+    preds_small, preds_medium, preds_large = model(dummy_image)
+    
+    # 4. Print out the shapes of the predictions!
+    print("Success! Here are the output shapes:")
+    
+    # Each prediction is a tuple of (Classes, Bounding Boxes, Objectness Score)
+    cls_s, reg_s, obj_s = preds_small
+    print(f"Small Object Head -> Classes: {cls_s.shape}, Boxes: {reg_s.shape}, Obj: {obj_s.shape}")
+    
+    cls_m, reg_m, obj_m = preds_medium
+    print(f"Medium Object Head -> Classes: {cls_m.shape}, Boxes: {reg_m.shape}, Obj: {obj_m.shape}")
+    
+    cls_l, reg_l, obj_l = preds_large
+    print(f"Large Object Head -> Classes: {cls_l.shape}, Boxes: {reg_l.shape}, Obj: {obj_l.shape}")
