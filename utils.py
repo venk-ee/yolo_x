@@ -80,4 +80,3 @@ def post_processing(flat_boxes,flat_obj,flat_cls,conf_thres=0.05,nms_thres=0.5):
     detections = torch.cat([final_boxes, final_scores, final_class_ids.float()], dim=1)
 
     return detections
-
