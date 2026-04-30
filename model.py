@@ -32,16 +32,12 @@ class ResBlock(nn.Module):
                             stride=1,
                             padding=1,
                             )
-
-    
     def forward(self,x):
         x_orig=x
         x=self.conv_1(x)
         x=self.conv_2(x)
 
         return x_orig+x       
-
-
 
 
 def make_group_of_conv(in_channels,num_blocks):
@@ -236,26 +232,26 @@ class YOLOx(nn.Module):
         return pred_small, pred_medium, pred_large
 
         
-if __name__ == "__main__":
-    # 1. Create a fake image tensor (Batch Size of 1, 3 Color Channels, 640x640 resolution)
-    dummy_image = torch.randn(1, 3, 640, 640)
+# if __name__ == "__main__":
+#     # 1. Create a fake image tensor (Batch Size of 1, 3 Color Channels, 640x640 resolution)
+#     dummy_image = torch.randn(1, 3, 640, 640)
     
-    # 2. Instantiate your shiny new model!
-    model = YOLOx(num_classes=80)
+#     # 2. Instantiate your shiny new model!
+#     model = YOLOx(num_classes=80)
     
-    # 3. Pass the fake image through the model
-    print("Feeding image to YOLOX...")
-    preds_small, preds_medium, preds_large = model(dummy_image)
+#     # 3. Pass the fake image through the model
+#     print("Feeding image to YOLOX...")
+#     preds_small, preds_medium, preds_large = model(dummy_image)
     
-    # 4. Print out the shapes of the predictions!
-    print("Success! Here are the output shapes:")
+#     # 4. Print out the shapes of the predictions!
+#     print("Success! Here are the output shapes:")
     
-    # Each prediction is a tuple of (Classes, Bounding Boxes, Objectness Score)
-    cls_s, reg_s, obj_s = preds_small
-    print(f"Small Object Head -> Classes: {cls_s.shape}, Boxes: {reg_s.shape}, Obj: {obj_s.shape}")
+#     # Each prediction is a tuple of (Classes, Bounding Boxes, Objectness Score)
+#     cls_s, reg_s, obj_s = preds_small
+#     print(f"Small Object Head -> Classes: {cls_s.shape}, Boxes: {reg_s.shape}, Obj: {obj_s.shape}")
     
-    cls_m, reg_m, obj_m = preds_medium
-    print(f"Medium Object Head -> Classes: {cls_m.shape}, Boxes: {reg_m.shape}, Obj: {obj_m.shape}")
+#     cls_m, reg_m, obj_m = preds_medium
+#     print(f"Medium Object Head -> Classes: {cls_m.shape}, Boxes: {reg_m.shape}, Obj: {obj_m.shape}")
     
-    cls_l, reg_l, obj_l = preds_large
-    print(f"Large Object Head -> Classes: {cls_l.shape}, Boxes: {reg_l.shape}, Obj: {obj_l.shape}")
+#     cls_l, reg_l, obj_l = preds_large
+#     print(f"Large Object Head -> Classes: {cls_l.shape}, Boxes: {reg_l.shape}, Obj: {obj_l.shape}")
