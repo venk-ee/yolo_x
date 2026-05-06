@@ -135,3 +135,64 @@ def calculate_dynamic_k(ious,num_candidates=10):
 
 
 
+def assign_winners(cost_matrix,dynamic_k):
+    #cost_matrix: [25]
+    #dynamic_k : int -> number of winners we decide in calculate_dynamic_k
+    #Grab the IDs (indices) of the candidates with the LOWEST costs
+    #We use [1] because topk returns (values, indices)
+    winner_indices=torch.topk(cost_matrix,k=dynamic_k,largest=False)[1]
+    # Create the blank checklist (Everyone is False/Fired)
+    final_assignment_mask=torch.zeros_like(cost_matrix,dtype=torch.bool)
+    #Mark the winners as True (Hired)
+    final_assignment_mask[winner_indices]=True
+
+    return final_assignment_mask
+
+
+def calculate_final_loss(predictions,gt_box,gt_class,fg_mask):
+    # predictions: [1600,85] -> The raw output of the network (box, obj, 80 classes)
+    # gt_box: [1,4] -> (y1,x1,y2,x2)-> The real dog box
+    # gt_class: int -> correct class id -> The real dog class ID
+    # fg_mask: [1600] -> (where the object is) -> True for the 4 winners, False for the 1596 losers
+
+    # NOTE: this is per object basis 
+
+    # SPLIT THE NETWORK PREDICTIONS INTO 3 SEPARATE TENSORS
+    # 1. The Bounding Box Predictions (4 values: center_x, center_y, width, height)
+    box_preds = predictions[:, :4]
+
+    # 2. The Objectness Score (1 value: probability that there is ANY object here)
+    obj_preds = predictions[:, 4:5]
+
+    # 3. The Class Predictions (80 values: probability distribution across all 80 classes)
+    cls_preds = predictions[:, 5:]
+
+
+    # OBJECTNESS (Everyone)
+    # the maks or ie the fg_mask is the target! true becomes 1.0 and false become 0.0
+    obj_targets=fg_mask.float().unsqueeze(1)
+    obj_loss=F.binary_cross_entropy_with_logits(obj_preds,obj_targets,reduction='sum')
+
+    # CLASSIFICATION (Winner only)
+
+    winner_preds_cls=cls_preds[fg_mask]
+
+    # Create the answer key for the winners
+
+    cls_traget=torch.zeros_like(winner_preds_cls)
+    cls_traget[:,gt_class]=1.0
+
+    loss_cls=F.binary_cross_entropy_with_logits(winner_preds_cls,cls_traget,reduction='sum')
+
+    winner_preds_box=box_preds[fg_mask]
+
+    ious = torchvision.ops.box_iou(winner_preds_box, gt_box).squeeze()
+    loss_reg=(1.0-ious).sum()
+
+    # total_loss=(obj_loss+loss_cls+loss_reg)/fg_mask.sum()
+
+    total_loss=obj_loss+loss_cls+(0.5*loss_reg)  #eq 3 of yolox paper
+    total_loss=total_loss/fg_mask.sum()
+    
+    return total_loss
+    
