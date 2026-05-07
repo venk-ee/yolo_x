@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torchvision
 
+###################### inference helpers ########################
 def decode_box(reg_pred, stride=16):
     
     batch_size,_,h,w=reg_pred.shape
@@ -82,7 +83,24 @@ def post_processing(flat_boxes,flat_obj,flat_cls,conf_thres=0.05,nms_thres=0.5):
 
     return detections
 
+
+################## concat the o/p from the model #############################
+
+def process_and_concat_heads(head_outputs,strides=[8,16,32]):
+
+    batch_size = head_outputs[0].shape[0]
+
+    all_decoded_boxex=[]
+    all_
+
+
+
 ########################### SimOTA  ###########################################
+
+def get_in_box_mask(gt_box, grid_coords):
+    pass
+
+
 
 def calculate_loss_matrix(class_pred,box_preds,gt_class,gt_box):
     # cls_preds: [25, 80] -> The 80 class scores for the 25 surviving candidates
@@ -149,6 +167,12 @@ def assign_winners(cost_matrix,dynamic_k):
     return final_assignment_mask
 
 
+def simota_label_wraper(prediction,gt_box,gt_class,grid_cords):
+    pass
+
+
+################## loss calculation #####################
+
 def calculate_final_loss(predictions,gt_box,gt_class,fg_mask):
     # predictions: [1600,85] -> The raw output of the network (box, obj, 80 classes)
     # gt_box: [1,4] -> (y1,x1,y2,x2)-> The real dog box
@@ -195,4 +219,5 @@ def calculate_final_loss(predictions,gt_box,gt_class,fg_mask):
     total_loss=total_loss/fg_mask.sum()
     
     return total_loss
-    
+
+
