@@ -166,11 +166,23 @@ class DecopledHead(nn.Module):
 class CSPDarknet_Backbone(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1=nn.Conv2d(3,64,kernel_size=6,stride=2,padding=2)
-        self.csp1_conv = nn.Conv2d(64,128,kernel_size=3,stride=2,padding=1)
-        self.csp1 = CSPBlock(128,128,8)
-        self.csp2 = CSPBlock(128,256,8)
-        self.csp3 = CSPBlock(256,512,8)
+        self.stem = nn.Conv2d(3, 64, kernel_size=6, stride=2, padding=2)
+
+        # Stage 1: 64 → 128
+        self.down1 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)
+        self.csp1  = CSPBlock(128, 128, num_blocks=3)
+
+        # Stage 2: 128 → 256  ← shallow output
+        self.down2 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)
+        self.csp2  = CSPBlock(256, 256, num_blocks=3)
+
+        # Stage 3: stays 256  ← mid output
+        self.down3 = nn.Conv2d(256, 256, 3, stride=1, padding=1)
+        self.csp3  = CSPBlock(256, 256, num_blocks=3)
+
+        # Stage 4: stays 256  ← deep output
+        self.down4 = nn.Conv2d(256, 256, 3, stride=1, padding=1)
+        self.csp4  = CSPBlock(256, 256, num_blocks=3)
 
     def forward(self,x):
         x=self.conv1(x)
@@ -179,7 +191,6 @@ class CSPDarknet_Backbone(nn.Module):
         x=self.csp2(x)
         x=self.csp3(x)
         return x
-
 
 class YOLOX(nn.Module):
     def __init__(self,num_classes:int):
