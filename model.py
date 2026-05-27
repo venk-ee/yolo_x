@@ -127,3 +127,79 @@ class YOLOXNeck(nn.Module):
 
 
         return shallow_processed, mid_pan_out, deep_processed
+
+
+class DecopledHead(nn.Module):
+    def __init__(self,in_channels:int,out_channels:int,num_classes:int):
+        super().__init__()
+
+        self.cls_convs = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU(),
+        )
+
+        self.reg_convs=nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU(),
+        )
+
+        self.cls_pred = nn.Conv2d(out_channels, num_classes, kernel_size=3, padding=1)
+        self.reg_pred = nn.Conv2d(out_channels, 4, kernel_size=3, padding=1)
+        self.obj_pred = nn.Conv2d(out_channels, 1, kernel_size=3, padding=1)
+
+
+    
+
+    def forward(self,x):
+        cls_feat=self.cls_convs(x)
+        reg_feat=self.reg_convs(x)
+
+        cls_out=self.cls_pred(cls_feat)
+        reg_out=self.reg_pred(reg_feat)
+        obj_out=self.obj_pred(reg_feat)
+
+        return cls_out,reg_out,obj_out
+
+
+class CSPDarknet_Backbone(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1=nn.Conv2d(3,64,kernel_size=6,stride=2,padding=2)
+        self.csp1_conv = nn.Conv2d(64,128,kernel_size=3,stride=2,padding=1)
+        self.csp1 = CSPBlock(128,128,8)
+        self.csp2 = CSPBlock(128,256,8)
+        self.csp3 = CSPBlock(256,512,8)
+
+    def forward(self,x):
+        x=self.conv1(x)
+        x=self.csp1_conv(x)
+        x=self.csp1(x)
+        x=self.csp2(x)
+        x=self.csp3(x)
+        return x
+
+
+class YOLOX(nn.Module):
+    def __init__(self,num_classes:int):
+        super().__init__()
+
+        self.backbone=CSPDarknet_Backbone()
+        self.neck=YOLOXNeck()
+
+        self.head_0 =DecopledHead(in_channels=256,out_channels=256,num_classes=num_classes)
+        self.head_1 =DecopledHead(in_channels=256,out_channels=256,num_classes=num_classes)
+        self.head_2 =DecopledHead(in_channels=256,out_channels=256,num_classes=num_classes)
+    
+
+    def forward(self,x):
+        x=self.backbone(x)
+        outputs=self.neck(x)
+
+        shallow_out = self.head_0(outputs[0])
+        mid_out= self.head_1(outputs[1])
+        deep_out = self.head_2(outputs[2])
+
+        return shallow_out,mid_out,deep_out
+        
