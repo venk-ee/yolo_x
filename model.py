@@ -44,12 +44,12 @@ class CSPBlock(nn.Module):
                 )
             )
         self.dense_block = nn.Sequential(*block)
-        
+
         concat_channels = (in_channels - in_channels // 2) + (out_channels // 2)
         self.out_proj = nn.Sequential(
             nn.Conv2d(concat_channels, out_channels, kernel_size=1),
             nn.BatchNorm2d(out_channels),
-            nn.SiLU()
+            nn.SiLU(),
         )
 
     def forward(self, x):
@@ -136,7 +136,7 @@ class DecoupledHead(nn.Module):
         self.stem = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=1),
             nn.BatchNorm2d(out_channels),
-            nn.SiLU()
+            nn.SiLU(),
         )
 
         self.cls_convs = nn.Sequential(
@@ -195,27 +195,28 @@ class CSPDarknet_Backbone(nn.Module):
         self.csp4 = CSPBlock(256, 256, num_blocks=3)
 
     def forward(self, x):
-            # Image comes in at 640x640
-            x = self.stem(x) # Drops to 320x320
-            
-            # Stage 1: We don't need this feature map, it's too big (160x160). 
-            # So we just keep calling it 'x' and pass it along.
-            x = self.down1(x)
-            x = self.csp1(x)
-            
-            # Stage 2: The Intern! (80x80). We want to save this!
-            x = self.down2(x)
-            shallow = self.csp2(x)
-            
-            # Stage 3: The Manager! (40x40). We want to save this!
-            x = self.down3(shallow)
-            mid = self.csp3(x)
-            
-            # Stage 4: The CEO! (20x20). We want to save this!
-            x = self.down4(mid)
-            deep = self.csp4(x)
-            
-            return shallow, mid, deep
+        # Image comes in at 640x640
+        x = self.stem(x)  # Drops to 320x320
+
+        # Stage 1: We don't need this feature map, it's too big (160x160).
+        # So we just keep calling it 'x' and pass it along.
+        x = self.down1(x)
+        x = self.csp1(x)
+
+        # Stage 2: The Intern! (80x80). We want to save this!
+        x = self.down2(x)
+        shallow = self.csp2(x)
+
+        # Stage 3: The Manager! (40x40). We want to save this!
+        x = self.down3(shallow)
+        mid = self.csp3(x)
+
+        # Stage 4: The CEO! (20x20). We want to save this!
+        x = self.down4(mid)
+        deep = self.csp4(x)
+
+        return shallow, mid, deep
+
 
 class YOLOX(nn.Module):
     def __init__(self, num_classes: int):
