@@ -17,11 +17,15 @@ class Bottleneck(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.SiLU(),
         )
+        if shortcut and in_channels != out_channels:
+            self.proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        else:
+            self.proj = nn.Identity()
 
     def forward(self, x):
         x_passed_through_convs = self.conv_layers(x)
         if self.shortcut:
-            return x + x_passed_through_convs
+            return self.proj(x) + x_passed_through_convs
         else:
             return x_passed_through_convs
 
@@ -34,12 +38,19 @@ class CSPBlock(nn.Module):
         for i in range(num_blocks):
             block.append(
                 Bottleneck(
-                    in_channels // 2,
+                    in_channels // 2 if i == 0 else out_channels // 2,
                     out_channels // 2,
-                    shortcut=True,
+                    shortcut=shortcut,
                 )
             )
         self.dense_block = nn.Sequential(*block)
+        
+        concat_channels = (in_channels - in_channels // 2) + (out_channels // 2)
+        self.out_proj = nn.Sequential(
+            nn.Conv2d(concat_channels, out_channels, kernel_size=1),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU()
+        )
 
     def forward(self, x):
         c = x.shape[1]
@@ -47,7 +58,8 @@ class CSPBlock(nn.Module):
         part_1 = x[:, half:, :, :]  # output of the right-side stack
         part_2 = x[:, :half, :, :]  # output of the left-side stack
         part_2_passed = self.dense_block(part_2)
-        return torch.cat((part_1, part_2_passed), dim=1)
+        out = torch.cat((part_1, part_2_passed), dim=1)
+        return self.out_proj(out)
 
 
 class YOLOXNeck(nn.Module):
@@ -117,27 +129,40 @@ class YOLOXNeck(nn.Module):
         return shallow_processed, mid_pan_out, deep_processed
 
 
-class DecopledHead(nn.Module):
+class DecoupledHead(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, num_classes: int):
         super().__init__()
 
+        self.stem = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=1),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU()
+        )
+
         self.cls_convs = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU(),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.SiLU(),
         )
 
         self.reg_convs = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.SiLU(),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.SiLU(),
         )
 
-        self.cls_pred = nn.Conv2d(out_channels, num_classes, kernel_size=3, padding=1)
-        self.reg_pred = nn.Conv2d(out_channels, 4, kernel_size=3, padding=1)
-        self.obj_pred = nn.Conv2d(out_channels, 1, kernel_size=3, padding=1)
+        self.cls_pred = nn.Conv2d(out_channels, num_classes, kernel_size=1)
+        self.reg_pred = nn.Conv2d(out_channels, 4, kernel_size=1)
+        self.obj_pred = nn.Conv2d(out_channels, 1, kernel_size=1)
 
     def forward(self, x):
+        x = self.stem(x)
         cls_feat = self.cls_convs(x)
         reg_feat = self.reg_convs(x)
 
@@ -199,13 +224,13 @@ class YOLOX(nn.Module):
         self.backbone = CSPDarknet_Backbone()
         self.neck = YOLOXNeck()
 
-        self.head_0 = DecopledHead(
+        self.head_0 = DecoupledHead(
             in_channels=256, out_channels=256, num_classes=num_classes
         )
-        self.head_1 = DecopledHead(
+        self.head_1 = DecoupledHead(
             in_channels=256, out_channels=256, num_classes=num_classes
         )
-        self.head_2 = DecopledHead(
+        self.head_2 = DecoupledHead(
             in_channels=256, out_channels=256, num_classes=num_classes
         )
 
