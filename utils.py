@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 from torchvision.ops import box_iou
 from torchvision.ops import generalized_box_iou
+import math
+import copy
 
 
 def cxcywh_to_xyxy(box):
@@ -97,3 +99,49 @@ def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
     final_gts, final_preds = torch.where(matching_matrix)
 
     return final_gts, final_preds
+
+
+class ModelEMA:
+    def __init__(self, model, device, decay=0.9999, updates=0):
+        self.ema = copy.deepcopy(model).eval().to(device)
+        self.updates = updates
+        self.decay = lambda x: decay * (1 - math.exp(-x / 2000))
+
+        for p in self.ema.parameters():
+            p.requires_grad = False
+
+    def update(self, model):
+        self.updates += 1
+        d = self.decay(self.updates)
+        with torch.no_grad():
+            for ema_v, model_v in zip(
+                self.ema.state_dict().values(), model.state_dict().values()
+            ):
+                if ema_v.dtype.is_floating_point:
+                    ema_v.copy_(ema_v * d + (1.0 - d) * model_v.detach())
+
+
+def get_optimizer(model, lr=0.001, weight_decay=5e-4):
+    return torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+
+def get_scheduler(optimizer, epochs, warmup_epochs=5, warmup_lr=0.01, min_lr=1e-5):
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[
+            torch.optim.lr_scheduler.LinearLR(
+                optimizer, start_factor=warmup_lr, total_iters=warmup_epochs
+            ),
+            torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=epochs - warmup_epochs, eta_min=min_lr
+            ),
+        ],
+        milestones=[warmup_epochs],
+    )
+
+
+def get_devices() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    else:
+        return "cpu"

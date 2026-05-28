@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-import torchvision
 import torch.nn.functional as F
 from torchvision.ops import generalized_box_iou
 from utils import cxcywh_to_xyxy, simota_matcher
