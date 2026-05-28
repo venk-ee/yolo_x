@@ -145,3 +145,11 @@ def get_devices() -> str:
         return "cuda"
     else:
         return "cpu"
+
+
+def post_process_nms():
+    pass
+
+
+def eval_metrics_coco_bbox():
+    pass

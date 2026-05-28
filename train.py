@@ -7,4 +7,10 @@ from model import YOLOX
 from loss import YOLOXLoss
 from data import get_dataloader
 
-# def train_one_epoch():
+def train_one_epoch():
+    pass
+
+
+def val_one_epoch():
+    pass
+    
