@@ -36,8 +36,6 @@ def  get_dynamic_k(ious):
     topk_num = min(10, ious.size(0))
     topk_ious=torch.sum(torch.topk(ious, k=topk_num).values)
     return max(1, int(topk_ious))
-    
-
 
 def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
     num_gt = gt_boxes.size(0)

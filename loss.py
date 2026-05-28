@@ -16,8 +16,8 @@ class YOLOXLoss(nn.Module):
 
     def get_grid_points(self, H, W, stride, device):
         # We pass H and W directly now!
-        xs = torch.arange(W, device=device) + 0.5
-        ys = torch.arange(H, device=device) + 0.5
+        xs = (torch.arange(W, device=device) + 0.5) * stride
+        ys = (torch.arange(H, device=device) + 0.5) * stride
         grid_y, grid_x = torch.meshgrid(ys, xs, indexing="ij")
         grid_x = grid_x.flatten()
         grid_y = grid_y.flatten()
@@ -84,14 +84,6 @@ class YOLOXLoss(nn.Module):
             all_obj.append(obj_out)
             all_grids.append(grids)
 
-
-            grids = self.get_grid_points(H, W, stride, device)  # [H*W, 2]
-
-            all_cls.append(...)
-            all_reg.append(...)
-            all_obj.append(...)
-            all_grids.append(grids)
-
         # [B, total_preds, ...]
         all_cls  = torch.cat(all_cls,  dim=1)
         all_reg  = torch.cat(all_reg,  dim=1)
@@ -143,11 +135,4 @@ class YOLOXLoss(nn.Module):
 
         # Normalise by number of positives (not batch size)
         norm = max(num_positives, 1)
-        return (total_cls_loss + total_reg_loss) / norm + total_obj_loss / B
-        
-
-
-
-
-        
-        
+        return (total_cls_loss + total_reg_loss + total_obj_loss) / norm
