@@ -36,6 +36,7 @@ class coco_data(torchvision.datasets.VisionDataset):
     def __getitem__(self, index):
         id = self.ids[index]
         image = self.get_image(id)
+        orig_h, orig_w = image.shape[:2]
         target = self.get_target(id)
         boxes = [t["bbox"] for t in target]
         category_ids = [t["category_id"] for t in target]
@@ -51,15 +52,17 @@ class coco_data(torchvision.datasets.VisionDataset):
             boxes = transformed["bboxes"]
             category_ids = transformed["category_ids"]
 
+        resized_h, resized_w = image.shape[:2]
+
         new_boxes = []
 
         for box in boxes:
-            xmin = box[0]
-            xmax = xmin + box[2]
-            ymin = box[1]
-            ymax = ymin + box[3]
+            cx = box[0] + (box[2] / 2.0)
+            cy = box[1] + (box[3] / 2.0)
+            w = box[2]
+            h = box[3]
 
-            new_boxes.append([xmin, ymin, xmax, ymax])
+            new_boxes.append([cx, cy, w, h])
 
         boxes = torch.tensor(new_boxes, dtype=torch.float32)
         # keypoints = torch.tensor(keypoints, dtype=torch.float32).reshape(-1, 2, 3)
@@ -74,6 +77,8 @@ class coco_data(torchvision.datasets.VisionDataset):
         # args['keypoints']=keypoints
 
         args = {
+            "orig_size": torch.tensor([orig_w, orig_h]),
+            "resized_size": torch.tensor([resized_w, resized_h]),
             "boxes": boxes,
             "image_id": torch.tensor(
                 [t["image_id"] for t in target], dtype=torch.int64

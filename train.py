@@ -4,7 +4,7 @@ from loss import YOLOXLoss
 from utils import get_data_loader, get_optimizer, get_scheduler, get_devices
 from train_and_val import train_one_epoch, val_one_epoch
 
-EPOCHS = 15
+EPOCHS = 150
 BATCH_SIZE = 4
 
 train_data_loader, val_data_loader, test_data_loader = get_data_loader(
@@ -25,6 +25,7 @@ best_map = 0
 for epoch in range(EPOCHS):
     train_one_epoch(model, train_data_loader, criterion, device, optimizer)
     mAP = val_one_epoch(model, val_data_loader, criterion, device)
+    scheduler.step()
 
     if mAP > best_map:
         best_map = mAP

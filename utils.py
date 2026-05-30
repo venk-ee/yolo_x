@@ -75,7 +75,7 @@ def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
 
     cost_matrix = loss_cls + 3.0 * loss_reg
 
-    matching_matrix = torch.zeros((num_gt, num_preds), dtype=torch.bool)
+    matching_matrix = torch.zeros((num_gt, num_preds), dtype=torch.bool, device=pred_boxes.device)
 
     for gt_idx in range(num_gt):
         gt_iou = ious[gt_idx]
@@ -232,11 +232,15 @@ def get_data_loader(
 
 
 def get_grid_points(H, W, stride, device):
-    """Generate grid center points for a feature map of size HxW."""
-    xs = (torch.arange(W, device=device) + 0.5) * stride
-    ys = (torch.arange(H, device=device) + 0.5) * stride
+    # We pass H and W directly now!
+    xs = torch.arange(W, device=device) + 0.5
+    ys = torch.arange(H, device=device) + 0.5
     grid_y, grid_x = torch.meshgrid(ys, xs, indexing="ij")
-    return torch.stack([grid_x.flatten(), grid_y.flatten()], dim=-1)
+    grid_x = grid_x.flatten()
+    grid_y = grid_y.flatten()
+
+    grid_points = torch.stack([grid_x, grid_y], dim=-1)
+    return grid_points
 
 
 def decode_boxes(reg_pred, grid_points, stride=1):
@@ -266,7 +270,7 @@ def post_process_nms(outputs, strides=[8, 16, 32], score_thresh=0.05, iou_thresh
     device = outputs[0][0].device
     B = outputs[0][0].size(0)
 
-    all_cls, all_reg, all_obj, all_grids = [], [], [], []
+    all_cls, all_reg, all_obj, all_grids, all_strides = [], [], [], [], []
 
     # Step 1: Flatten all 3 heads (same logic as loss.py lines 74-84)
     for (cls_out, reg_out, obj_out), stride in zip(outputs, strides):
@@ -274,19 +278,22 @@ def post_process_nms(outputs, strides=[8, 16, 32], score_thresh=0.05, iou_thresh
         all_cls.append(cls_out.view(B, C, -1).permute(0, 2, 1))
         all_reg.append(reg_out.view(B, 4, -1).permute(0, 2, 1))
         all_obj.append(obj_out.view(B, 1, -1).permute(0, 2, 1))
-        all_grids.append(get_grid_points(H, W, stride, device))
+        grids = get_grid_points(H, W, stride, device)
+        all_grids.append(grids)
+        all_strides.append(torch.full_like(grids[:, 0], stride))
 
     # Concatenate across all scales
     all_cls = torch.cat(all_cls, dim=1).sigmoid()  # [B, N, num_classes]
     all_reg = torch.cat(all_reg, dim=1)  # [B, N, 4]
     all_obj = torch.cat(all_obj, dim=1).sigmoid()  # [B, N, 1]
     all_grids = torch.cat(all_grids, dim=0)  # [N, 2]
+    all_strides = torch.cat(all_strides, dim=0)  # [N]
 
     # Step 2: Process each image in the batch
     results = []
     for i in range(B):
         # Decode raw regression into [cx, cy, w, h]
-        decoded_cxcywh = decode_boxes(all_reg[i], all_grids, stride=1)
+        decoded_cxcywh = decode_boxes(all_reg[i], all_grids, all_strides)
 
         # Convert to [xmin, ymin, xmax, ymax] for NMS
         decoded_xyxy = cxcywh_to_xyxy(decoded_cxcywh)
@@ -339,10 +346,21 @@ def format_for_coco(results, targets):
     for i in range(len(results)):
         boxes, scores, labels = results[i]
         image_id = targets[i]["image_id"][0].item()
+        orig_w, orig_h = targets[i]["orig_size"].tolist()
+        resized_w, resized_h = targets[i]["resized_size"].tolist()
+        
+        scale_x = orig_w / float(resized_w)
+        scale_y = orig_h / float(resized_h)
 
         # Loop over every surviving box for this image
         for j in range(len(boxes)):
             xmin, ymin, xmax, ymax = boxes[j].tolist()
+            
+            xmin = xmin * scale_x
+            xmax = xmax * scale_x
+            ymin = ymin * scale_y
+            ymax = ymax * scale_y
+            
             w = xmax - xmin
             h = ymax - ymin
 

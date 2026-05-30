@@ -2,9 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from torchvision.ops import generalized_box_iou
-from utils import cxcywh_to_xyxy, simota_matcher
-
-##--NOTE:AI WAS USED IN DEVLOPMENT OF THIS SCRIPT-------
+from utils import cxcywh_to_xyxy, simota_matcher, get_grid_points, decode_boxes
 
 
 class YOLOXLoss(nn.Module):
@@ -13,33 +11,6 @@ class YOLOXLoss(nn.Module):
 
         self.strides = strides
         self.num_classes = num_classes
-
-    def get_grid_points(self, H, W, stride, device):
-        # We pass H and W directly now!
-        xs = (torch.arange(W, device=device) + 0.5) * stride
-        ys = (torch.arange(H, device=device) + 0.5) * stride
-        grid_y, grid_x = torch.meshgrid(ys, xs, indexing="ij")
-        grid_x = grid_x.flatten()
-        grid_y = grid_y.flatten()
-
-        grid_points = torch.stack([grid_x, grid_y], dim=-1)
-        return grid_points
-
-    def decode_boxes(self, reg_pred, grid_points, stride):
-        # reg_pred is [N, 4] -> dx, dy, dw, dh
-        # grid_points is [N, 2] -> grid_x, grid_y
-
-        # 1. Add grid offsets and multiply by stride for x and y
-        cx = (reg_pred[:, 0] + grid_points[:, 0]) * stride
-        cy = (reg_pred[:, 1] + grid_points[:, 1]) * stride
-
-        # 2. Exponentiate width and height and multiply by stride
-        w = torch.exp(reg_pred[:, 2]) * stride
-        h = torch.exp(reg_pred[:, 3]) * stride
-
-        # 3. Stack them back together!
-        decoded_boxes = torch.stack([cx, cy, w, h], dim=-1)
-        return decoded_boxes
 
     def iou_loss(self, pred_boxes, gt_boxes):
         # 1. Convert both to xyxy
@@ -69,7 +40,7 @@ class YOLOXLoss(nn.Module):
         B = predictions[0][0].size(0)
 
         # Step 1: flatten each scale, collect grid points
-        all_cls, all_reg, all_obj, all_grids = [], [], [], []
+        all_cls, all_reg, all_obj, all_grids, all_strides = [], [], [], [], []
 
         for (cls_out, reg_out, obj_out), stride in zip(predictions, self.strides):
             B, C, H, W = cls_out.shape
@@ -77,17 +48,19 @@ class YOLOXLoss(nn.Module):
             cls_out = cls_out.view(B, self.num_classes, -1).permute(0, 2, 1)
             reg_out = reg_out.view(B, 4, -1).permute(0, 2, 1)
             obj_out = obj_out.view(B, 1, -1).permute(0, 2, 1)
-            grids = self.get_grid_points(H, W, stride, device)  # [H*W, 2]
+            grids = get_grid_points(H, W, stride, device)  # [H*W, 2]
             all_cls.append(cls_out)
             all_reg.append(reg_out)
             all_obj.append(obj_out)
             all_grids.append(grids)
+            all_strides.append(torch.full_like(grids[:, 0], stride))
 
         # [B, total_preds, ...]
         all_cls = torch.cat(all_cls, dim=1)
         all_reg = torch.cat(all_reg, dim=1)
         all_obj = torch.cat(all_obj, dim=1)
         all_grids = torch.cat(all_grids, dim=0)  # [total_preds, 2]
+        all_strides = torch.cat(all_strides, dim=0)  # [total_preds]
 
         # Step 2: loop over batch
         total_cls_loss = torch.tensor(0.0, device=device)
@@ -102,9 +75,7 @@ class YOLOXLoss(nn.Module):
             gt_b = gt_boxes_list[i]
             gt_c = gt_cls_list[i]
 
-            # 1. Decode reg_i using all_grids
-            # Note: stride is 1 because the grids already account for it!
-            decoded_boxes = self.decode_boxes(reg_i, all_grids, stride=1)
+            decoded_boxes = decode_boxes(reg_i, all_grids, all_strides)
 
             # 2. Run SimOTA
             gt_idx, pred_idx = simota_matcher(decoded_boxes, cls_i, gt_b, gt_c)
