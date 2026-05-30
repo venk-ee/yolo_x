@@ -5,7 +5,7 @@ from utils import get_data_loader, get_optimizer, get_scheduler, get_devices
 from train_and_val import train_one_epoch, val_one_epoch
 
 EPOCHS = 150
-BATCH_SIZE = 4
+BATCH_SIZE = 16
 
 train_data_loader, val_data_loader, test_data_loader = get_data_loader(
     BATCH_SIZE=BATCH_SIZE
