@@ -21,6 +21,9 @@ class coco_data(torchvision.datasets.VisionDataset):
         self.anno = anno
         self.image_folder = image_folder
         self.coco = COCO(os.path.join(self.root, self.split, self.anno))
+        self.cat_ids = sorted(self.coco.getCatIds())
+        self.cat_id_to_label = {cat_id: i for i, cat_id in enumerate(self.cat_ids)}
+        self.label_to_cat_id = torch.tensor(self.cat_ids, dtype=torch.int64)
         self.ids = list(sorted(self.coco.imgs.keys()))
         self.ids = [id for id in self.ids if len(self.get_target(id)) > 0]
 
@@ -86,8 +89,10 @@ class coco_data(torchvision.datasets.VisionDataset):
             "iscrowd": torch.tensor([t["iscrowd"] for t in target], dtype=torch.uint8),
             "area": boxes[:, 2] * boxes[:, 3],
             "labels": torch.tensor(
-                [t["category_id"] for t in target], dtype=torch.int64
+                [self.cat_id_to_label[cat_id] for cat_id in category_ids],
+                dtype=torch.int64,
             ),
+            "label_to_cat_id": self.label_to_cat_id,
             # "keypoints": keypoints,
         }
 

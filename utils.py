@@ -183,11 +183,11 @@ def get_data_loader(
     test_data_loader = None
     if train:
         train_dataset = coco_data(
-            root="/home/kenny/pytorch/yolo_x/data/coco8",
+            root="/mnt/ken/coco_2017",
             split="",
-            anno="annotations/instances_train.json",
+            anno="annotations/instances_train2017.json",
             transforms=train_transform,
-            image_folder="images/train",
+            image_folder="train2017",
         )
 
         train_loader = DataLoader(
@@ -200,11 +200,11 @@ def get_data_loader(
         train_data_loader = train_loader
     if test:
         test_dataset = coco_data(
-            root="/home/kenny/pytorch/yolo_x/data/coco8",
+            root="/mnt/ken/coco_2017",
             split="",
-            anno="annotations/instances_train.json",
+            anno="annotations/instances_train2017.json",
             transforms=test_transform,
-            image_folder="images/test",
+            image_folder="train2017",
         )
 
         test_loader = DataLoader(
@@ -218,11 +218,11 @@ def get_data_loader(
 
     if val:
         val_dataset = coco_data(
-            root="/home/kenny/pytorch/yolo_x/data/coco8",
+            root="/mnt/ken/coco_2017",
             split="",
-            anno="annotations/instances_val.json",
+            anno="annotations/instances_val2017.json",
             transforms=val_transform,
-            image_folder="images/val",
+            image_folder="val2017",
         )
 
         val_loader = DataLoader(
@@ -354,6 +354,7 @@ def format_for_coco(results, targets):
         image_id = targets[i]["image_id"][0].item()
         orig_w, orig_h = targets[i]["orig_size"].tolist()
         resized_w, resized_h = targets[i]["resized_size"].tolist()
+        label_to_cat_id = targets[i].get("label_to_cat_id")
 
         scale_x = orig_w / float(resized_w)
         scale_y = orig_h / float(resized_h)
@@ -373,7 +374,11 @@ def format_for_coco(results, targets):
             batch_preds.append(
                 {
                     "image_id": image_id,
-                    "category_id": labels[j].item(),
+                    "category_id": (
+                        label_to_cat_id[labels[j]].item()
+                        if label_to_cat_id is not None
+                        else labels[j].item()
+                    ),
                     "bbox": [xmin, ymin, w, h],
                     "score": scores[j].item(),
                 }
