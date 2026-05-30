@@ -1,11 +1,17 @@
 from model import YOLOX
 import torch
+import argparse
 from loss import YOLOXLoss
 from utils import get_data_loader, get_optimizer, get_scheduler, get_devices
 from train_and_val import train_one_epoch, val_one_epoch
 
-EPOCHS = 150
-BATCH_SIZE = 16
+parser = argparse.ArgumentParser()
+parser.add_argument("--epochs", type=int, default=150)
+parser.add_argument("--batch_size", type=int, default=16)
+args = parser.parse_args()
+
+EPOCHS = args.epochs
+BATCH_SIZE = args.batch_size
 
 train_data_loader, val_data_loader, test_data_loader = get_data_loader(
     BATCH_SIZE=BATCH_SIZE
