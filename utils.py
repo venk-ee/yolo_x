@@ -172,7 +172,7 @@ def collate_fn(batch):
 def get_data_loader(
     train=True,
     val=True,
-    test=None,
+    test=True,
     BATCH_SIZE=32,
     train_transform=get_transform(True),
     val_transform=get_transform(False),
@@ -183,7 +183,7 @@ def get_data_loader(
     test_data_loader = None
     if train:
         train_dataset = coco_data(
-            root="/mnt/ken/coco_2017",
+            root="/kaggle/input/coco-2017-dataset/coco2017",
             split="",
             anno="annotations/instances_train2017.json",
             transforms=train_transform,
@@ -200,7 +200,7 @@ def get_data_loader(
         train_data_loader = train_loader
     if test:
         test_dataset = coco_data(
-            root="/mnt/ken/coco_2017",
+            root="/kaggle/input/coco-2017-dataset/coco2017",
             split="",
             anno="annotations/instances_train2017.json",
             transforms=test_transform,
@@ -218,7 +218,7 @@ def get_data_loader(
 
     if val:
         val_dataset = coco_data(
-            root="/mnt/ken/coco_2017",
+            root="/kaggle/input/coco-2017-dataset/coco2017",
             split="",
             anno="annotations/instances_val2017.json",
             transforms=val_transform,
