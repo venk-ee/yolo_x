@@ -6,11 +6,12 @@ from utils import cxcywh_to_xyxy, simota_matcher
 
 ##--NOTE:AI WAS USED IN DEVLOPMENT OF THIS SCRIPT-------
 
+
 class YOLOXLoss(nn.Module):
-    def __init__(self,num_classes=80, strides=[8, 16, 32]):
+    def __init__(self, num_classes=80, strides=[8, 16, 32]):
         super().__init__()
 
-        self.strides=strides
+        self.strides = strides
         self.num_classes = num_classes
 
     def get_grid_points(self, H, W, stride, device):
@@ -24,15 +25,14 @@ class YOLOXLoss(nn.Module):
         grid_points = torch.stack([grid_x, grid_y], dim=-1)
         return grid_points
 
-
-    def decode_boxes(self,reg_pred,grid_points,stride):
+    def decode_boxes(self, reg_pred, grid_points, stride):
         # reg_pred is [N, 4] -> dx, dy, dw, dh
         # grid_points is [N, 2] -> grid_x, grid_y
 
         # 1. Add grid offsets and multiply by stride for x and y
         cx = (reg_pred[:, 0] + grid_points[:, 0]) * stride
         cy = (reg_pred[:, 1] + grid_points[:, 1]) * stride
-        
+
         # 2. Exponentiate width and height and multiply by stride
         w = torch.exp(reg_pred[:, 2]) * stride
         h = torch.exp(reg_pred[:, 3]) * stride
@@ -40,21 +40,21 @@ class YOLOXLoss(nn.Module):
         # 3. Stack them back together!
         decoded_boxes = torch.stack([cx, cy, w, h], dim=-1)
         return decoded_boxes
-    
+
     def iou_loss(self, pred_boxes, gt_boxes):
         # 1. Convert both to xyxy
         pred_xyxy = cxcywh_to_xyxy(pred_boxes)
         gt_xyxy = cxcywh_to_xyxy(gt_boxes)
-        
+
         # 2. Calculate GIoU. It gives an [N, N] matrix.
         giou_matrix = generalized_box_iou(pred_xyxy, gt_xyxy)
-        
+
         # 3. We only care about the direct matches (the diagonal!)
         giou_scores = giou_matrix.diag()
-        
+
         # 4. Loss is 1 - GIoU
         loss = 1.0 - giou_scores
-        return loss.sum() # Return the sum of the loss
+        return loss.sum()  # Return the sum of the loss
 
     def forward(self, predictions, gt_boxes_list, gt_cls_list):
         """
@@ -84,23 +84,23 @@ class YOLOXLoss(nn.Module):
             all_grids.append(grids)
 
         # [B, total_preds, ...]
-        all_cls  = torch.cat(all_cls,  dim=1)
-        all_reg  = torch.cat(all_reg,  dim=1)
-        all_obj  = torch.cat(all_obj,  dim=1)
+        all_cls = torch.cat(all_cls, dim=1)
+        all_reg = torch.cat(all_reg, dim=1)
+        all_obj = torch.cat(all_obj, dim=1)
         all_grids = torch.cat(all_grids, dim=0)  # [total_preds, 2]
 
         # Step 2: loop over batch
-        total_cls_loss = torch.tensor(0., device=device)
-        total_reg_loss = torch.tensor(0., device=device)
-        total_obj_loss = torch.tensor(0., device=device)
-        num_positives  = 0
+        total_cls_loss = torch.tensor(0.0, device=device)
+        total_reg_loss = torch.tensor(0.0, device=device)
+        total_obj_loss = torch.tensor(0.0, device=device)
+        num_positives = 0
 
         for i in range(B):
-            cls_i  = all_cls[i]   # [total_preds, num_classes]
-            reg_i  = all_reg[i]   # [total_preds, 4]
-            obj_i  = all_obj[i]   # [total_preds, 1]
-            gt_b   = gt_boxes_list[i]
-            gt_c   = gt_cls_list[i]
+            cls_i = all_cls[i]  # [total_preds, num_classes]
+            reg_i = all_reg[i]  # [total_preds, 4]
+            obj_i = all_obj[i]  # [total_preds, 1]
+            gt_b = gt_boxes_list[i]
+            gt_c = gt_cls_list[i]
 
             # 1. Decode reg_i using all_grids
             # Note: stride is 1 because the grids already account for it!
@@ -113,15 +113,19 @@ class YOLOXLoss(nn.Module):
             obj_targets = torch.zeros_like(obj_i)
             if pred_idx.numel() > 0:
                 obj_targets[pred_idx] = 1.0
-            total_obj_loss += F.binary_cross_entropy_with_logits(obj_i, obj_targets, reduction="sum")
+            total_obj_loss += F.binary_cross_entropy_with_logits(
+                obj_i, obj_targets, reduction="sum"
+            )
 
             # 4. If no positives, skip cls/reg
-            if pred_idx.numel() == 0: 
+            if pred_idx.numel() == 0:
                 continue
 
             # 5. Cls loss on positives only
             gt_classes_for_winners = gt_c[gt_idx]
-            cls_targets = F.one_hot(gt_classes_for_winners, num_classes=self.num_classes).float()
+            cls_targets = F.one_hot(
+                gt_classes_for_winners, num_classes=self.num_classes
+            ).float()
             total_cls_loss += F.binary_cross_entropy_with_logits(
                 cls_i[pred_idx], cls_targets, reduction="sum"
             )
@@ -130,7 +134,6 @@ class YOLOXLoss(nn.Module):
             total_reg_loss += self.iou_loss(decoded_boxes[pred_idx], gt_b[gt_idx])
 
             num_positives += pred_idx.numel()
-
 
         # Normalise by number of positives (not batch size)
         norm = max(num_positives, 1)

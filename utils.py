@@ -1,4 +1,5 @@
 import torch
+import torchvision
 import torch.nn.functional as F
 from torchvision.ops import box_iou
 from torchvision.ops import generalized_box_iou
@@ -7,6 +8,8 @@ import copy
 from torch.utils.data import DataLoader
 
 from data import coco_data, get_transform
+
+from pycocotools.cocoeval import COCOeval
 
 
 def cxcywh_to_xyxy(box):
@@ -150,14 +153,6 @@ def get_devices() -> str:
         return "cpu"
 
 
-def post_process_nms():
-    pass
-
-
-def eval_metrics_coco_bbox():
-    pass
-
-
 def collate_fn(batch):
     images = []
     targets = []
@@ -234,3 +229,130 @@ def get_data_loader(
         val_data_loader = val_loader
 
     return train_data_loader, val_data_loader, test_data_loader
+
+
+def get_grid_points(H, W, stride, device):
+    """Generate grid center points for a feature map of size HxW."""
+    xs = (torch.arange(W, device=device) + 0.5) * stride
+    ys = (torch.arange(H, device=device) + 0.5) * stride
+    grid_y, grid_x = torch.meshgrid(ys, xs, indexing="ij")
+    return torch.stack([grid_x.flatten(), grid_y.flatten()], dim=-1)
+
+
+def decode_boxes(reg_pred, grid_points, stride=1):
+    """Decode raw regression outputs into [cx, cy, w, h] coordinates."""
+    cx = (reg_pred[:, 0] + grid_points[:, 0]) * stride
+    cy = (reg_pred[:, 1] + grid_points[:, 1]) * stride
+    w = torch.exp(reg_pred[:, 2]) * stride
+    h = torch.exp(reg_pred[:, 3]) * stride
+    return torch.stack([cx, cy, w, h], dim=-1)
+
+
+def post_process_nms(outputs, strides=[8, 16, 32], score_thresh=0.05, iou_thresh=0.5):
+    """
+    Takes raw model outputs and returns filtered detections after NMS.
+
+    Args:
+        outputs: tuple of 3 tuples -> (shallow, mid, deep)
+                 each is (cls_out, reg_out, obj_out)
+        strides: the stride for each head
+        score_thresh: minimum confidence to keep a box
+        iou_thresh: IoU threshold for NMS overlap removal
+
+    Returns:
+        list of (boxes, scores, labels) per image in the batch
+        boxes are in [xmin, ymin, xmax, ymax] format
+    """
+    device = outputs[0][0].device
+    B = outputs[0][0].size(0)
+
+    all_cls, all_reg, all_obj, all_grids = [], [], [], []
+
+    # Step 1: Flatten all 3 heads (same logic as loss.py lines 74-84)
+    for (cls_out, reg_out, obj_out), stride in zip(outputs, strides):
+        _, C, H, W = cls_out.shape
+        all_cls.append(cls_out.view(B, C, -1).permute(0, 2, 1))
+        all_reg.append(reg_out.view(B, 4, -1).permute(0, 2, 1))
+        all_obj.append(obj_out.view(B, 1, -1).permute(0, 2, 1))
+        all_grids.append(get_grid_points(H, W, stride, device))
+
+    # Concatenate across all scales
+    all_cls = torch.cat(all_cls, dim=1).sigmoid()  # [B, N, num_classes]
+    all_reg = torch.cat(all_reg, dim=1)  # [B, N, 4]
+    all_obj = torch.cat(all_obj, dim=1).sigmoid()  # [B, N, 1]
+    all_grids = torch.cat(all_grids, dim=0)  # [N, 2]
+
+    # Step 2: Process each image in the batch
+    results = []
+    for i in range(B):
+        # Decode raw regression into [cx, cy, w, h]
+        decoded_cxcywh = decode_boxes(all_reg[i], all_grids, stride=1)
+
+        # Convert to [xmin, ymin, xmax, ymax] for NMS
+        decoded_xyxy = cxcywh_to_xyxy(decoded_cxcywh)
+
+        # Final score = objectness * class_probability
+        scores_per_class = all_obj[i] * all_cls[i]  # [N, num_classes]
+
+        # Find the best class and its score for each box
+        max_scores, class_ids = scores_per_class.max(dim=1)
+
+        # Filter out low-confidence boxes
+        mask = max_scores > score_thresh
+        boxes = decoded_xyxy[mask]
+        scores = max_scores[mask]
+        labels = class_ids[mask]
+
+        # Run NMS to remove overlapping boxes
+        keep = torchvision.ops.nms(boxes, scores, iou_thresh)
+
+        results.append((boxes[keep], scores[keep], labels[keep]))
+
+    return results
+
+
+def eval_metrics_coco_bbox(coco_gt, predictions_list):
+    if len(predictions_list) == 0:
+        return 0.0
+    if "info" not in coco_gt.dataset:
+        coco_gt.dataset["info"] = {}
+
+    # Load the predictions into a COCO object
+    coco_dt = coco_gt.loadRes(predictions_list)
+
+    # Initialize the COCO evaluator for bounding boxes
+    coco_eval = COCOeval(coco_gt, coco_dt, "bbox")
+
+    # Run the math
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+
+    # coco_eval.stats[0] contains the mAP score across IoU thresholds 0.50:0.95!
+    return coco_eval.stats[0]
+
+
+def format_for_coco(results, targets):
+    batch_preds = []
+
+    # Loop over each image in the batch
+    for i in range(len(results)):
+        boxes, scores, labels = results[i]
+        image_id = targets[i]["image_id"][0].item()
+
+        # Loop over every surviving box for this image
+        for j in range(len(boxes)):
+            xmin, ymin, xmax, ymax = boxes[j].tolist()
+            w = xmax - xmin
+            h = ymax - ymin
+
+            batch_preds.append(
+                {
+                    "image_id": image_id,
+                    "category_id": labels[j].item(),
+                    "bbox": [xmin, ymin, w, h],
+                    "score": scores[j].item(),
+                }
+            )
+
+    return batch_preds
