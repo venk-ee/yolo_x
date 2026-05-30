@@ -79,7 +79,9 @@ def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
 
     cost_matrix = loss_cls + 3.0 * loss_reg
 
-    matching_matrix = torch.zeros((num_gt, num_preds), dtype=torch.bool, device=pred_boxes.device)
+    matching_matrix = torch.zeros(
+        (num_gt, num_preds), dtype=torch.bool, device=pred_boxes.device
+    )
 
     for gt_idx in range(num_gt):
         gt_iou = ious[gt_idx]
@@ -352,19 +354,19 @@ def format_for_coco(results, targets):
         image_id = targets[i]["image_id"][0].item()
         orig_w, orig_h = targets[i]["orig_size"].tolist()
         resized_w, resized_h = targets[i]["resized_size"].tolist()
-        
+
         scale_x = orig_w / float(resized_w)
         scale_y = orig_h / float(resized_h)
 
         # Loop over every surviving box for this image
         for j in range(len(boxes)):
             xmin, ymin, xmax, ymax = boxes[j].tolist()
-            
+
             xmin = xmin * scale_x
             xmax = xmax * scale_x
             ymin = ymin * scale_y
             ymax = ymax * scale_y
-            
+
             w = xmax - xmin
             h = ymax - ymin
 
