@@ -4,6 +4,9 @@ from torchvision.ops import box_iou
 from torchvision.ops import generalized_box_iou
 import math
 import copy
+from torch.utils.data import DataLoader
+
+from data import coco_data, get_transform
 
 
 def cxcywh_to_xyxy(box):
@@ -153,3 +156,81 @@ def post_process_nms():
 
 def eval_metrics_coco_bbox():
     pass
+
+
+def collate_fn(batch):
+    images = []
+    targets = []
+    for image, target in batch:
+        images.append(image)
+        targets.append(target)
+    images = torch.stack(images)
+    return images, targets
+
+
+def get_data_loader(
+    train=True,
+    val=True,
+    test=None,
+    BATCH_SIZE=32,
+    train_transform=get_transform(True),
+    val_transform=get_transform(False),
+    test_transform=get_transform(False),
+):
+    train_data_loader = None
+    val_data_loader = None
+    test_data_loader = None
+    if train:
+        train_dataset = coco_data(
+            root="/home/kenny/pytorch/yolo_x/data/coco8",
+            split="",
+            anno="annotations/instances_train.json",
+            transforms=train_transform,
+            image_folder="images/train",
+        )
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            num_workers=2,
+            collate_fn=collate_fn,
+        )
+        train_data_loader = train_loader
+    if test:
+        test_dataset = coco_data(
+            root="/home/kenny/pytorch/yolo_x/data/coco8",
+            split="",
+            anno="annotations/instances_train.json",
+            transforms=test_transform,
+            image_folder="images/test",
+        )
+
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            num_workers=2,
+            collate_fn=collate_fn,
+        )
+        test_data_loader = test_loader
+
+    if val:
+        val_dataset = coco_data(
+            root="/home/kenny/pytorch/yolo_x/data/coco8",
+            split="",
+            anno="annotations/instances_val.json",
+            transforms=val_transform,
+            image_folder="images/val",
+        )
+
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=True,
+            num_workers=2,
+            collate_fn=collate_fn,
+        )
+        val_data_loader = val_loader
+
+    return train_data_loader, val_data_loader, test_data_loader

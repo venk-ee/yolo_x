@@ -2,18 +2,14 @@ import torch
 import torchvision
 from pycocotools.coco import COCO
 
-# import albumentations as A
+import albumentations as A
 import os
 import cv2
 
 
 class coco_data(torchvision.datasets.VisionDataset):
     def __init__(
-        self,
-        root=None,
-        split=None,
-        anno=None,
-        transforms=None,
+        self, root=None, split=None, anno=None, transforms=None, image_folder=None
     ):
         super().__init__(
             root,
@@ -23,13 +19,14 @@ class coco_data(torchvision.datasets.VisionDataset):
         self.root = root
         self.split = split
         self.anno = anno
+        self.image_folder = image_folder
         self.coco = COCO(os.path.join(self.root, self.split, self.anno))
         self.ids = list(sorted(self.coco.imgs.keys()))
         self.ids = [id for id in self.ids if len(self.get_target(id)) > 0]
 
     def get_image(self, id):
         path = self.coco.loadImgs(id)[0]["file_name"]
-        image = cv2.imread(os.path.join(self.root, self.split, path))
+        image = cv2.imread(os.path.join(self.root, self.split, self.image_folder, path))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
 
@@ -40,17 +37,19 @@ class coco_data(torchvision.datasets.VisionDataset):
         id = self.ids[index]
         image = self.get_image(id)
         target = self.get_target(id)
-        boxes = [t["bbox"] + [t["category_id"]] for t in target]
-        keypoints = [t["keypoints"] for t in target]
+        boxes = [t["bbox"] for t in target]
+        category_ids = [t["category_id"] for t in target]
 
         if self.transforms is not None:
             transformed = self.transforms(
-                image=image, bboxes=boxes, keypoints=keypoints
+                image=image,
+                bboxes=boxes,
+                category_ids=category_ids,
             )
 
             image = transformed["image"]
             boxes = transformed["bboxes"]
-            keypoints = transformed["keypoints"]
+            category_ids = transformed["category_ids"]
 
         new_boxes = []
 
@@ -63,7 +62,7 @@ class coco_data(torchvision.datasets.VisionDataset):
             new_boxes.append([xmin, ymin, xmax, ymax])
 
         boxes = torch.tensor(new_boxes, dtype=torch.float32)
-        keypoints = torch.tensor(keypoints, dtype=torch.float32).reshape(-1, 2, 3)
+        # keypoints = torch.tensor(keypoints, dtype=torch.float32).reshape(-1, 2, 3)
 
         # args={}
 
@@ -84,10 +83,25 @@ class coco_data(torchvision.datasets.VisionDataset):
             "labels": torch.tensor(
                 [t["category_id"] for t in target], dtype=torch.int64
             ),
-            "keypoints": keypoints,
+            # "keypoints": keypoints,
         }
+
+        image = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1)
 
         return image / 255.0, args
 
     def __len__(self):
         return len(self.ids)
+
+
+def get_transform(train: bool):
+    if train:
+        return A.Compose(
+            [A.Resize(640, 640)],
+            bbox_params=A.BboxParams(format="coco", label_fields=["category_ids"]),
+        )
+    else:
+        return A.Compose(
+            [A.Resize(640, 640)],
+            bbox_params=A.BboxParams(format="coco", label_fields=["category_ids"]),
+        )
