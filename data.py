@@ -84,7 +84,7 @@ class coco_data(torchvision.datasets.VisionDataset):
                 [t["image_id"] for t in target], dtype=torch.int64
             ),
             "iscrowd": torch.tensor([t["iscrowd"] for t in target], dtype=torch.uint8),
-            "area": (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0]),
+            "area": boxes[:, 2] * boxes[:, 3],
             "labels": torch.tensor(
                 [t["category_id"] for t in target], dtype=torch.int64
             ),

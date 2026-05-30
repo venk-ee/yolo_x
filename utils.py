@@ -44,6 +44,7 @@ def get_dynamic_k(ious):
     # ious is a tensor of shape [num_preds]
     if ious.size(0) == 0:
         return 1
+    ious = torch.nan_to_num(ious, nan=0.0, posinf=0.0, neginf=0.0)
     topk_num = min(10, ious.size(0))
     topk_ious = torch.sum(torch.topk(ious, k=topk_num).values)
     return max(1, int(topk_ious))
@@ -54,9 +55,12 @@ def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
     num_preds = pred_boxes.size(0)
 
     if num_gt == 0 or num_preds == 0:
-        return torch.zeros(0, dtype=torch.long), torch.zeros(0, dtype=torch.long)
+        return torch.zeros(0, dtype=torch.long, device=pred_boxes.device), torch.zeros(
+            0, dtype=torch.long, device=pred_boxes.device
+        )
 
     ious = get_box_IoU(gt_boxes, pred_boxes)
+    ious = torch.nan_to_num(ious, nan=0.0, posinf=0.0, neginf=0.0)
 
     loss_reg = -torch.log(ious + 1e-8)
 
@@ -222,7 +226,7 @@ def get_data_loader(
         val_loader = DataLoader(
             val_dataset,
             batch_size=BATCH_SIZE,
-            shuffle=True,
+            shuffle=False,
             num_workers=2,
             collate_fn=collate_fn,
         )
@@ -247,8 +251,8 @@ def decode_boxes(reg_pred, grid_points, stride=1):
     """Decode raw regression outputs into [cx, cy, w, h] coordinates."""
     cx = (reg_pred[:, 0] + grid_points[:, 0]) * stride
     cy = (reg_pred[:, 1] + grid_points[:, 1]) * stride
-    w = torch.exp(reg_pred[:, 2]) * stride
-    h = torch.exp(reg_pred[:, 3]) * stride
+    w = torch.exp(reg_pred[:, 2].clamp(max=8.0)) * stride
+    h = torch.exp(reg_pred[:, 3].clamp(max=8.0)) * stride
     return torch.stack([cx, cy, w, h], dim=-1)
 
 
