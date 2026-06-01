@@ -196,6 +196,8 @@ def get_data_loader(
             shuffle=True,
             num_workers=2,
             collate_fn=collate_fn,
+            pin_memory=torch.cuda.is_available(),
+            persistent_workers=True,
         )
         train_data_loader = train_loader
     if test:
@@ -213,6 +215,8 @@ def get_data_loader(
             shuffle=True,
             num_workers=2,
             collate_fn=collate_fn,
+            pin_memory=torch.cuda.is_available(),
+            persistent_workers=True,
         )
         test_data_loader = test_loader
 
@@ -231,6 +235,8 @@ def get_data_loader(
             shuffle=False,
             num_workers=2,
             collate_fn=collate_fn,
+            pin_memory=torch.cuda.is_available(),
+            persistent_workers=True,
         )
         val_data_loader = val_loader
 
@@ -370,14 +376,15 @@ def format_for_coco(results, targets):
 
             w = xmax - xmin
             h = ymax - ymin
+            label_idx = int(labels[j].item())
 
             batch_preds.append(
                 {
                     "image_id": image_id,
                     "category_id": (
-                        label_to_cat_id[labels[j]].item()
+                        label_to_cat_id[label_idx].item()
                         if label_to_cat_id is not None
-                        else labels[j].item()
+                        else label_idx
                     ),
                     "bbox": [xmin, ymin, w, h],
                     "score": scores[j].item(),
