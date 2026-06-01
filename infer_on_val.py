@@ -1,6 +1,7 @@
 import os, sys, cv2, torch
 from model import YOLOX
 from utils import post_process_nms
+from data import letterbox_image, unletterbox_boxes_xyxy
 
 # 1. Setup path & device
 image_path = (
@@ -21,7 +22,7 @@ if img is None:
     print("Invalid image path")
     sys.exit(1)
 h, w = img.shape[:2]
-resized = cv2.resize(img, (640, 640))
+resized, scale, pad_left, pad_top, _, _ = letterbox_image(img)
 tensor = (
     torch.from_numpy(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)).float().permute(2, 0, 1)
     / 255.0
@@ -32,12 +33,15 @@ tensor = tensor.unsqueeze(0).to(device)
 with torch.no_grad():
     outputs = model(tensor)
 boxes, scores, _ = post_process_nms(outputs, score_thresh=0.25)[0]
+boxes = unletterbox_boxes_xyxy(boxes, scale, pad_left, pad_top, w, h)
 
 # 5. Draw and Save
 for box, score in zip(boxes, scores):
     x1, y1, x2, y2 = [val.item() for val in box]
-    x1, x2 = int(x1 * (w / 640.0)), int(x2 * (w / 640.0))
-    y1, y2 = int(y1 * (h / 640.0)), int(y2 * (h / 640.0))
+    x1, x2 = int(x1), int(x2)
+    y1, y2 = int(y1), int(y2)
+    if x2 <= x1 or y2 <= y1:
+        continue
 
     cv2.rectangle(img, (x1, y1), (x2, y2), (255, 235, 0), 2)
     cv2.putText(

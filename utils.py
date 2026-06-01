@@ -393,20 +393,41 @@ def format_for_coco(results, targets):
         boxes, scores, labels = results[i]
         image_id = targets[i]["image_id"][0].item()
         orig_w, orig_h = targets[i]["orig_size"].tolist()
-        resized_w, resized_h = targets[i]["resized_size"].tolist()
         label_to_cat_id = targets[i].get("label_to_cat_id")
+        letterbox_scale = targets[i].get("letterbox_scale")
+        letterbox_pad = targets[i].get("letterbox_pad")
+        use_letterbox = letterbox_scale is not None and letterbox_pad is not None
 
-        scale_x = orig_w / float(resized_w)
-        scale_y = orig_h / float(resized_h)
+        if use_letterbox:
+            scale = float(letterbox_scale.item())
+            pad_left, pad_top = letterbox_pad.tolist()
+        else:
+            resized_w, resized_h = targets[i]["resized_size"].tolist()
+            scale_x = orig_w / float(resized_w)
+            scale_y = orig_h / float(resized_h)
 
         # Loop over every surviving box for this image
         for j in range(len(boxes)):
             xmin, ymin, xmax, ymax = boxes[j].tolist()
 
-            xmin = xmin * scale_x
-            xmax = xmax * scale_x
-            ymin = ymin * scale_y
-            ymax = ymax * scale_y
+            if use_letterbox:
+                xmin = (xmin - pad_left) / scale
+                xmax = (xmax - pad_left) / scale
+                ymin = (ymin - pad_top) / scale
+                ymax = (ymax - pad_top) / scale
+            else:
+                xmin = xmin * scale_x
+                xmax = xmax * scale_x
+                ymin = ymin * scale_y
+                ymax = ymax * scale_y
+
+            xmin = max(0.0, min(xmin, orig_w))
+            xmax = max(0.0, min(xmax, orig_w))
+            ymin = max(0.0, min(ymin, orig_h))
+            ymax = max(0.0, min(ymax, orig_h))
+
+            if xmax <= xmin or ymax <= ymin:
+                continue
 
             w = xmax - xmin
             h = ymax - ymin

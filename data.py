@@ -7,6 +7,67 @@ import os
 import cv2
 
 
+IMAGE_SIZE = 640
+LETTERBOX_COLOR = (114, 114, 114)
+
+
+def letterbox_image(image, new_shape=IMAGE_SIZE, color=LETTERBOX_COLOR):
+    """Resize while keeping aspect ratio, then pad to a square."""
+    orig_h, orig_w = image.shape[:2]
+    scale = min(new_shape / float(orig_h), new_shape / float(orig_w))
+
+    resized_w = int(round(orig_w * scale))
+    resized_h = int(round(orig_h * scale))
+
+    resized_image = cv2.resize(image, (resized_w, resized_h), interpolation=cv2.INTER_LINEAR)
+
+    pad_w = new_shape - resized_w
+    pad_h = new_shape - resized_h
+    pad_left = pad_w // 2
+    pad_right = pad_w - pad_left
+    pad_top = pad_h // 2
+    pad_bottom = pad_h - pad_top
+
+    letterboxed = cv2.copyMakeBorder(
+        resized_image,
+        pad_top,
+        pad_bottom,
+        pad_left,
+        pad_right,
+        borderType=cv2.BORDER_CONSTANT,
+        value=color,
+    )
+
+    return letterboxed, scale, pad_left, pad_top, resized_w, resized_h
+
+
+def letterbox_boxes_coco(boxes, scale, pad_left, pad_top):
+    letterboxed_boxes = []
+    for box in boxes:
+        x, y, w, h = box
+        letterboxed_boxes.append(
+            [x * scale + pad_left, y * scale + pad_top, w * scale, h * scale]
+        )
+    return letterboxed_boxes
+
+
+def unletterbox_boxes_xyxy(boxes, scale, pad_left, pad_top, orig_w, orig_h):
+    if boxes.numel() == 0:
+        return boxes
+
+    boxes = boxes.clone()
+    boxes[:, 0] = (boxes[:, 0] - pad_left) / scale
+    boxes[:, 2] = (boxes[:, 2] - pad_left) / scale
+    boxes[:, 1] = (boxes[:, 1] - pad_top) / scale
+    boxes[:, 3] = (boxes[:, 3] - pad_top) / scale
+
+    boxes[:, 0].clamp_(0, orig_w)
+    boxes[:, 2].clamp_(0, orig_w)
+    boxes[:, 1].clamp_(0, orig_h)
+    boxes[:, 3].clamp_(0, orig_h)
+    return boxes
+
+
 class coco_data(torchvision.datasets.VisionDataset):
     def __init__(
         self, root=None, split=None, anno=None, transforms=None, image_folder=None
@@ -55,7 +116,8 @@ class coco_data(torchvision.datasets.VisionDataset):
             boxes = transformed["bboxes"]
             category_ids = transformed["category_ids"]
 
-        resized_h, resized_w = image.shape[:2]
+        image, scale, pad_left, pad_top, resized_w, resized_h = letterbox_image(image)
+        boxes = letterbox_boxes_coco(boxes, scale, pad_left, pad_top)
 
         new_boxes = []
 
@@ -67,21 +129,16 @@ class coco_data(torchvision.datasets.VisionDataset):
 
             new_boxes.append([cx, cy, w, h])
 
-        boxes = torch.tensor(new_boxes, dtype=torch.float32)
-        # keypoints = torch.tensor(keypoints, dtype=torch.float32).reshape(-1, 2, 3)
-
-        # args={}
-
-        # args['bbox']=torch.tensor(new_boxes,dtype=torch.float32)
-        # args['image_id']=torch.tensor([t['image_id']for t in target],dtype=torch.int64)
-        # args['iscrowd']=torch.tensor([t['iscrowd'] for t in target], dtype=torch.uint8),
-        # args['area']=((boxes[:,3]-boxes[:,1]) *(boxes[:,2]- boxes[:,0]) )
-        # args['labels']=torch.tensor([t['category_id']for t in target],dtype= torch.int64)
-        # args['keypoints']=keypoints
+        if len(new_boxes) > 0:
+            boxes = torch.tensor(new_boxes, dtype=torch.float32)
+        else:
+            boxes = torch.zeros((0, 4), dtype=torch.float32)
 
         args = {
             "orig_size": torch.tensor([orig_w, orig_h]),
-            "resized_size": torch.tensor([resized_w, resized_h]),
+            "resized_size": torch.tensor([IMAGE_SIZE, IMAGE_SIZE]),
+            "letterbox_scale": torch.tensor(scale, dtype=torch.float32),
+            "letterbox_pad": torch.tensor([pad_left, pad_top], dtype=torch.float32),
             "boxes": boxes,
             "image_id": torch.tensor(
                 [t["image_id"] for t in target], dtype=torch.int64
@@ -105,13 +162,7 @@ class coco_data(torchvision.datasets.VisionDataset):
 
 
 def get_transform(train: bool):
-    if train:
-        return A.Compose(
-            [A.Resize(640, 640)],
-            bbox_params=A.BboxParams(format="coco", label_fields=["category_ids"]),
-        )
-    else:
-        return A.Compose(
-            [A.Resize(640, 640)],
-            bbox_params=A.BboxParams(format="coco", label_fields=["category_ids"]),
-        )
+    return A.Compose(
+        [A.NoOp()],
+        bbox_params=A.BboxParams(format="coco", label_fields=["category_ids"]),
+    )

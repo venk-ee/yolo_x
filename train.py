@@ -5,7 +5,13 @@ import os
 import csv
 import time
 from loss import YOLOXLoss
-from utils import get_data_loader, get_optimizer, get_scheduler, get_devices
+from utils import (
+    get_data_loader,
+    get_optimizer,
+    get_scheduler,
+    get_devices,
+    ModelEMA,
+)
 from train_and_val import train_one_epoch, val_one_epoch
 
 parser = argparse.ArgumentParser()
@@ -31,13 +37,14 @@ criterion = YOLOXLoss(num_classes=num_classes)
 optimizer = get_optimizer(model)
 scheduler = get_scheduler(optimizer, epochs=EPOCHS)
 scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda"))
+ema = ModelEMA(model, device) if device == "cuda" else None
 
 
 SAVE_DIR = "/home/kenny/pytorch/yolo_x/model"
 os.makedirs(SAVE_DIR, exist_ok=True)
 CSV_PATH = f"{SAVE_DIR}/metrics.csv"
 
-best_map = 0
+best_map = -1.0
 
 with open(CSV_PATH, "w", newline="") as csv_file:
     writer = csv.DictWriter(
@@ -63,18 +70,26 @@ with open(CSV_PATH, "w", newline="") as csv_file:
             device,
             optimizer,
             scaler=scaler,
+            ema=ema,
             epoch=epoch,
             total_epochs=EPOCHS,
         )
+        eval_model = ema.ema if ema is not None else model
         mAP, val_loss = val_one_epoch(
-            model, val_data_loader, criterion, device, epoch=epoch, total_epochs=EPOCHS
+            eval_model,
+            val_data_loader,
+            criterion,
+            device,
+            epoch=epoch,
+            total_epochs=EPOCHS,
         )
         current_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
 
         if mAP > best_map:
             best_map = mAP
-            torch.save(model.state_dict(), f"{SAVE_DIR}/best_model.pth")
+            best_state = ema.ema.state_dict() if ema is not None else model.state_dict()
+            torch.save(best_state, f"{SAVE_DIR}/best_model.pth")
             print(f"  ★ New best mAP: {best_map:.4f} — best model saved!")
 
         epoch_time = time.time() - epoch_start
@@ -83,6 +98,7 @@ with open(CSV_PATH, "w", newline="") as csv_file:
             {
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
+                "ema_state_dict": ema.ema.state_dict() if ema is not None else None,
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "best_map": best_map,

@@ -10,6 +10,7 @@ def train_one_epoch(
     device,
     optimizer,
     scaler=None,
+    ema=None,
     epoch=0,
     total_epochs=0,
 ):
@@ -43,6 +44,9 @@ def train_one_epoch(
         else:
             loss.backward()
             optimizer.step()
+
+        if ema is not None:
+            ema.update(model)
 
         running_loss += loss.item()
         avg_loss = running_loss / (batch_idx + 1)
