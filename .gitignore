@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 *.pth
 .DS_Store
+*.csv
+model/metrics.csv
