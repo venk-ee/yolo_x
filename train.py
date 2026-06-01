@@ -30,7 +30,7 @@ model = YOLOX(num_classes=num_classes).to(device)
 criterion = YOLOXLoss(num_classes=num_classes)
 optimizer = get_optimizer(model)
 scheduler = get_scheduler(optimizer, epochs=EPOCHS)
-scaler = torch.cuda.amp.GradScaler(enabled=(device == "cuda"))
+scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda"))
 
 
 SAVE_DIR = "/home/kenny/pytorch/yolo_x/model"
@@ -109,8 +109,8 @@ with open(CSV_PATH, "w", newline="") as csv_file:
         csv_file.flush()
 
         print(
-            f"\n  Epoch {epoch+1}/{EPOCHS} Summary:  mAP={mAP:.4f}  best_mAP={best_map:.4f}  lr={current_lr:.6f}"
+            f"\n  Epoch {epoch + 1}/{EPOCHS} Summary:  mAP={mAP:.4f}  best_mAP={best_map:.4f}  lr={current_lr:.6f}"
         )
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
 print(f"\nTraining complete. Best mAP: {best_map:.4f}")

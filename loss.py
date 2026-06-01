@@ -6,11 +6,25 @@ from utils import cxcywh_to_xyxy, simota_matcher, get_grid_points, decode_boxes
 
 
 class YOLOXLoss(nn.Module):
-    def __init__(self, num_classes=80, strides=[8, 16, 32]):
+    def __init__(
+        self,
+        num_classes=80,
+        strides=[8, 16, 32],
+        cls_weight=1.0,
+        reg_weight=5.0,
+        obj_weight=1.0,
+        neg_obj_weight=0.25,
+        center_radius=2.5,
+    ):
         super().__init__()
 
         self.strides = strides
         self.num_classes = num_classes
+        self.cls_weight = cls_weight
+        self.reg_weight = reg_weight
+        self.obj_weight = obj_weight
+        self.neg_obj_weight = neg_obj_weight
+        self.center_radius = center_radius
 
     def iou_loss(self, pred_boxes, gt_boxes):
         # 1. Convert both to xyxy
@@ -61,6 +75,7 @@ class YOLOXLoss(nn.Module):
         all_obj = torch.cat(all_obj, dim=1)
         all_grids = torch.cat(all_grids, dim=0)  # [total_preds, 2]
         all_strides = torch.cat(all_strides, dim=0)  # [total_preds]
+        anchor_centers = all_grids * all_strides.unsqueeze(-1)
 
         # Step 2: loop over batch
         total_cls_loss = torch.tensor(0.0, device=device)
@@ -78,15 +93,29 @@ class YOLOXLoss(nn.Module):
             decoded_boxes = decode_boxes(reg_i, all_grids, all_strides)
 
             # 2. Run SimOTA
-            gt_idx, pred_idx = simota_matcher(decoded_boxes, cls_i, gt_b, gt_c)
+            gt_idx, pred_idx = simota_matcher(
+                decoded_boxes,
+                cls_i,
+                gt_b,
+                gt_c,
+                anchor_centers=anchor_centers,
+                strides=all_strides,
+                center_radius=self.center_radius,
+            )
 
             # 3. Objectness targets — all zeros, then set positives to 1
             obj_targets = torch.zeros_like(obj_i)
             if pred_idx.numel() > 0:
                 obj_targets[pred_idx] = 1.0
-            total_obj_loss += F.binary_cross_entropy_with_logits(
-                obj_i, obj_targets, reduction="sum"
+            obj_loss = F.binary_cross_entropy_with_logits(
+                obj_i, obj_targets, reduction="none"
             )
+            obj_weights = torch.where(
+                obj_targets > 0.5,
+                torch.ones_like(obj_targets),
+                torch.full_like(obj_targets, self.neg_obj_weight),
+            )
+            total_obj_loss += self.obj_weight * (obj_loss * obj_weights).mean()
 
             # 4. If no positives, skip cls/reg
             if pred_idx.numel() == 0:
@@ -102,10 +131,13 @@ class YOLOXLoss(nn.Module):
             )
 
             # 6. Reg loss on positives only
-            total_reg_loss += self.iou_loss(decoded_boxes[pred_idx], gt_b[gt_idx])
+            total_reg_loss += self.reg_weight * self.iou_loss(
+                decoded_boxes[pred_idx], gt_b[gt_idx]
+            )
 
             num_positives += pred_idx.numel()
 
         # Normalise by number of positives (not batch size)
         norm = max(num_positives, 1)
-        return (total_cls_loss + total_reg_loss + total_obj_loss) / norm
+        obj_norm = max(B, 1)
+        return (self.cls_weight * total_cls_loss + total_reg_loss) / norm + total_obj_loss / obj_norm

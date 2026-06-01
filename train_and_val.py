@@ -4,7 +4,14 @@ from utils import post_process_nms, format_for_coco, eval_metrics_coco_bbox
 
 
 def train_one_epoch(
-    model, dataloader, criterion, device, optimizer, scaler=None, epoch=0, total_epochs=0
+    model,
+    dataloader,
+    criterion,
+    device,
+    optimizer,
+    scaler=None,
+    epoch=0,
+    total_epochs=0,
 ):
     model.train()
     running_loss = 0.0
@@ -12,9 +19,9 @@ def train_one_epoch(
     use_amp = device == "cuda"
     avg_loss = 0.0
 
-    print(f"\n{'='*60}")
-    print(f"  EPOCH {epoch+1}/{total_epochs} — Training")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print(f"  EPOCH {epoch + 1}/{total_epochs} — Training")
+    print(f"{'=' * 60}")
 
     for batch_idx, (images, targets) in enumerate(dataloader):
         images = images.to(device, non_blocking=True)
@@ -41,7 +48,9 @@ def train_one_epoch(
         avg_loss = running_loss / (batch_idx + 1)
 
         if (batch_idx + 1) % 50 == 0 or (batch_idx + 1) == num_batches:
-            print(f"  [Batch {batch_idx+1}/{num_batches}]  loss: {loss.item():.4f}  avg_loss: {avg_loss:.4f}")
+            print(
+                f"  [Batch {batch_idx + 1}/{num_batches}]  loss: {loss.item():.4f}  avg_loss: {avg_loss:.4f}"
+            )
 
     print(f"  Train Loss (avg): {avg_loss:.4f}")
     return avg_loss
@@ -56,9 +65,9 @@ def val_one_epoch(model, val_loader, criterion, device, epoch=0, total_epochs=0)
 
     model.eval()
 
-    print(f"\n{'-'*60}")
-    print(f"  EPOCH {epoch+1}/{total_epochs} — Validation")
-    print(f"{'-'*60}")
+    print(f"\n{'-' * 60}")
+    print(f"  EPOCH {epoch + 1}/{total_epochs} — Validation")
+    print(f"{'-' * 60}")
 
     with torch.inference_mode():
         for batch_idx, (images, targets) in enumerate(val_loader):
@@ -69,7 +78,9 @@ def val_one_epoch(model, val_loader, criterion, device, epoch=0, total_epochs=0)
             with torch.autocast(device_type="cuda", enabled=use_amp):
                 out = model(images)
 
-            out = tuple((cls.float(), reg.float(), obj.float()) for cls, reg, obj in out)
+            out = tuple(
+                (cls.float(), reg.float(), obj.float()) for cls, reg, obj in out
+            )
             loss = criterion(out, gt_boxes_list, gt_cls_list)
 
             running_loss += loss.item()
@@ -82,7 +93,9 @@ def val_one_epoch(model, val_loader, criterion, device, epoch=0, total_epochs=0)
             all_preds.extend(batch_preds)
 
             if (batch_idx + 1) % 50 == 0 or (batch_idx + 1) == num_batches:
-                print(f"  [Batch {batch_idx+1}/{num_batches}]  val_loss: {avg_loss:.4f}")
+                print(
+                    f"  [Batch {batch_idx + 1}/{num_batches}]  val_loss: {avg_loss:.4f}"
+                )
 
         print(f"\n  COCO Evaluation:")
         mAP = eval_metrics_coco_bbox(val_loader.dataset.coco, all_preds)

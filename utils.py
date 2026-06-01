@@ -50,7 +50,15 @@ def get_dynamic_k(ious):
     return max(1, int(topk_ious))
 
 
-def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
+def simota_matcher(
+    pred_boxes,
+    pred_cls,
+    gt_boxes,
+    gt_cls,
+    anchor_centers=None,
+    strides=None,
+    center_radius=2.5,
+):
     num_gt = gt_boxes.size(0)
     num_preds = pred_boxes.size(0)
 
@@ -79,18 +87,44 @@ def simota_matcher(pred_boxes, pred_cls, gt_boxes, gt_cls):
 
     cost_matrix = loss_cls + 3.0 * loss_reg
 
+    if anchor_centers is not None and strides is not None:
+        gt_centers = gt_boxes[:, :2]
+        strides = strides.to(device=pred_boxes.device, dtype=pred_boxes.dtype)
+        radius = center_radius * strides.unsqueeze(0)
+        center_dist_x = (
+            anchor_centers[:, 0].unsqueeze(0) - gt_centers[:, 0].unsqueeze(1)
+        ).abs()
+        center_dist_y = (
+            anchor_centers[:, 1].unsqueeze(0) - gt_centers[:, 1].unsqueeze(1)
+        ).abs()
+        candidate_mask = (center_dist_x < radius) & (center_dist_y < radius)
+    else:
+        candidate_mask = torch.ones(
+            (num_gt, num_preds), dtype=torch.bool, device=pred_boxes.device
+        )
+
     matching_matrix = torch.zeros(
         (num_gt, num_preds), dtype=torch.bool, device=pred_boxes.device
     )
 
     for gt_idx in range(num_gt):
-        gt_iou = ious[gt_idx]
+        gt_candidate_mask = candidate_mask[gt_idx]
+        if gt_candidate_mask.any():
+            candidate_indices = torch.nonzero(
+                gt_candidate_mask, as_tuple=False
+            ).squeeze(1)
+            gt_iou = ious[gt_idx, candidate_indices]
+            gt_cost = cost_matrix[gt_idx, candidate_indices]
+        else:
+            candidate_indices = torch.arange(num_preds, device=pred_boxes.device)
+            gt_iou = ious[gt_idx]
+            gt_cost = cost_matrix[gt_idx]
 
         dynamic_k = get_dynamic_k(gt_iou)
-
-        gt_cost = cost_matrix[gt_idx]
-
-        topk_index = torch.topk(gt_cost, k=dynamic_k, largest=False).indices
+        topk_local = torch.topk(
+            gt_cost, k=min(dynamic_k, gt_cost.numel()), largest=False
+        ).indices
+        topk_index = candidate_indices[topk_local]
 
         matching_matrix[gt_idx, topk_index] = True
 
