@@ -140,4 +140,6 @@ class YOLOXLoss(nn.Module):
         # Normalise by number of positives (not batch size)
         norm = max(num_positives, 1)
         obj_norm = max(B, 1)
-        return (self.cls_weight * total_cls_loss + total_reg_loss) / norm + total_obj_loss / obj_norm
+        return (
+            self.cls_weight * total_cls_loss + total_reg_loss
+        ) / norm + total_obj_loss / obj_norm
