@@ -183,11 +183,11 @@ def get_data_loader(
     test_data_loader = None
     if train:
         train_dataset = coco_data(
-            root="/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017",
+            root="/mnt/ken/exe_real_coco",
             split="",
-            anno="annotations/instances_train2017.json",
+            anno="annotations/instances_train.json",
             transforms=train_transform,
-            image_folder="train2017",
+            image_folder="images/train",
         )
 
         train_loader = DataLoader(
@@ -200,11 +200,11 @@ def get_data_loader(
         train_data_loader = train_loader
     if test:
         test_dataset = coco_data(
-            root="/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017",
+            root="/mnt/ken/exe_real_coco",
             split="",
-            anno="annotations/instances_train2017.json",
+            anno="annotations/instances_test.json",
             transforms=test_transform,
-            image_folder="train2017",
+            image_folder="images/test",
         )
 
         test_loader = DataLoader(
@@ -218,11 +218,11 @@ def get_data_loader(
 
     if val:
         val_dataset = coco_data(
-            root="/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017",
+            root="/mnt/ken/exe_real_coco",
             split="",
-            anno="annotations/instances_val2017.json",
+            anno="annotations/instances_val.json",
             transforms=val_transform,
-            image_folder="val2017",
+            image_folder="images/val",
         )
 
         val_loader = DataLoader(
