@@ -104,17 +104,20 @@ class coco_data(torchvision.datasets.VisionDataset):
         target = self.get_target(id)
         boxes = [t["bbox"] for t in target]
         category_ids = [t["category_id"] for t in target]
+        iscrowd = [t["iscrowd"] for t in target]
 
         if self.transforms is not None:
             transformed = self.transforms(
                 image=image,
                 bboxes=boxes,
                 category_ids=category_ids,
+                iscrowd=iscrowd,
             )
 
             image = transformed["image"]
             boxes = transformed["bboxes"]
             category_ids = transformed["category_ids"]
+            iscrowd = transformed["iscrowd"]
 
         image, scale, pad_left, pad_top, resized_w, resized_h = letterbox_image(image)
         boxes = letterbox_boxes_coco(boxes, scale, pad_left, pad_top)
@@ -143,7 +146,7 @@ class coco_data(torchvision.datasets.VisionDataset):
             "image_id": torch.tensor(
                 [t["image_id"] for t in target], dtype=torch.int64
             ),
-            "iscrowd": torch.tensor([t["iscrowd"] for t in target], dtype=torch.uint8),
+            "iscrowd": torch.tensor(iscrowd, dtype=torch.uint8),
             "area": boxes[:, 2] * boxes[:, 3],
             "labels": torch.tensor(
                 [self.cat_id_to_label[cat_id] for cat_id in category_ids],
@@ -162,7 +165,44 @@ class coco_data(torchvision.datasets.VisionDataset):
 
 
 def get_transform(train: bool):
-    return A.Compose(
-        [A.NoOp()],
-        bbox_params=A.BboxParams(format="coco", label_fields=["category_ids"]),
-    )
+    # Note: Bounding boxes and labels are automatically transformed/rotated 
+    # by Albumentations to match the modified image using the bbox_params settings.
+    if train:
+        return A.Compose(
+            [
+                # Geometric transforms (YOLO standard style: horizontal flip, scale & translate)
+                A.HorizontalFlip(p=0.5),
+                A.Affine(
+                    scale=(0.5, 1.5),
+                    translate_percent=(-0.1, 0.1),
+                    rotate=0,
+                    shear=0,
+                    p=0.5,
+                ),
+                # Color transforms (YOLO HSV augmentation)
+                A.HueSaturationValue(
+                    hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=30, p=0.5
+                ),
+                A.RandomBrightnessContrast(
+                    brightness_limit=0.2, contrast_limit=0.2, p=0.5
+                ),
+            ],
+            bbox_params=A.BboxParams(
+                format="coco",
+                label_fields=["category_ids", "iscrowd"],
+                min_area=5,
+                min_visibility=0.1,
+            ),
+        )
+    else:
+        # Validation/testing requires clean images without augmentations
+        return A.Compose(
+            [A.NoOp()],
+            bbox_params=A.BboxParams(
+                format="coco",
+                label_fields=["category_ids", "iscrowd"],
+                min_area=1,
+                min_visibility=0.01,
+            ),
+        )
+

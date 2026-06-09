@@ -217,7 +217,7 @@ def get_data_loader(
     test_data_loader = None
     if train:
         train_dataset = coco_data(
-            root="/mnt/ken/exe_real_coco",
+            root="/mnt/ken/new_datas_i_used_to_train/voc",
             split="",
             anno="annotations/instances_train.json",
             transforms=train_transform,
@@ -228,7 +228,7 @@ def get_data_loader(
             train_dataset,
             batch_size=BATCH_SIZE,
             shuffle=True,
-            num_workers=2,
+            num_workers=4,
             collate_fn=collate_fn,
             pin_memory=torch.cuda.is_available(),
             persistent_workers=True,
@@ -236,7 +236,7 @@ def get_data_loader(
         train_data_loader = train_loader
     if test:
         test_dataset = coco_data(
-            root="/mnt/ken/exe_real_coco",
+            root="/mnt/ken/new_datas_i_used_to_train/voc",
             split="",
             anno="annotations/instances_test.json",
             transforms=test_transform,
@@ -247,7 +247,7 @@ def get_data_loader(
             test_dataset,
             batch_size=BATCH_SIZE,
             shuffle=True,
-            num_workers=2,
+            num_workers=4,
             collate_fn=collate_fn,
             pin_memory=torch.cuda.is_available(),
             persistent_workers=True,
@@ -256,7 +256,7 @@ def get_data_loader(
 
     if val:
         val_dataset = coco_data(
-            root="/mnt/ken/exe_real_coco",
+            root="/mnt/ken/new_datas_i_used_to_train/voc",
             split="",
             anno="annotations/instances_val.json",
             transforms=val_transform,
@@ -357,7 +357,7 @@ def post_process_nms(outputs, strides=[8, 16, 32], score_thresh=0.05, iou_thresh
         labels = class_ids[mask]
 
         # Run NMS to remove overlapping boxes
-        keep = torchvision.ops.nms(boxes, scores, iou_thresh)
+        keep = torchvision.ops.batched_nms(boxes, scores, labels, iou_thresh)
 
         results.append((boxes[keep], scores[keep], labels[keep]))
 
