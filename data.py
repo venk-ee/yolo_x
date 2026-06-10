@@ -19,7 +19,9 @@ def letterbox_image(image, new_shape=IMAGE_SIZE, color=LETTERBOX_COLOR):
     resized_w = int(round(orig_w * scale))
     resized_h = int(round(orig_h * scale))
 
-    resized_image = cv2.resize(image, (resized_w, resized_h), interpolation=cv2.INTER_LINEAR)
+    resized_image = cv2.resize(
+        image, (resized_w, resized_h), interpolation=cv2.INTER_LINEAR
+    )
 
     pad_w = new_shape - resized_w
     pad_h = new_shape - resized_h
@@ -165,7 +167,7 @@ class coco_data(torchvision.datasets.VisionDataset):
 
 
 def get_transform(train: bool):
-    # Note: Bounding boxes and labels are automatically transformed/rotated 
+    # Note: Bounding boxes and labels are automatically transformed/rotated
     # by Albumentations to match the modified image using the bbox_params settings.
     if train:
         return A.Compose(
@@ -205,4 +207,3 @@ def get_transform(train: bool):
                 min_visibility=0.01,
             ),
         )
-
