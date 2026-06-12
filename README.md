@@ -1,19 +1,67 @@
-# yolo_x
+# YOLO-X
 
+A custom implementation of YOLO-X object detection model in PyTorch.
 
+## Training
 
-cd /home/kenny/pytorch/yolo_x/data
-mkdir coco2017 && cd coco2017
+The model was trained on the **Pascal VOC** dataset for **300 epochs**.
 
-wget http://images.cocodataset.org/zips/train2017.zip
-wget http://images.cocodataset.org/zips/val2017.zip
-wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+### Training & Validation Loss
 
-unzip train2017.zip
-unzip val2017.zip
-unzip annotations_trainval2017.zip
+![Loss Curve](assects/loss_curve.png)
 
+### Mean Average Precision (mAP)
 
-aria2c -x 16 -s 16 http://images.cocodataset.org/zips/train2017.zip
-aria2c -x 16 -s 16 http://images.cocodataset.org/zips/val2017.zip
-aria2c -x 16 -s 16 http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+![mAP Curve](assects/map_curve.png)
+
+### Learning Rate Schedule
+
+![LR Schedule](assects/lr_schedule.png)
+
+## Results
+
+| Metric | Value |
+|--------|-------|
+| Best mAP | 0.2819 |
+| Final Train Loss | 0.934 |
+| Final Val Loss | 1.632 |
+| Total Epochs | 300 |
+
+## Hyperparameters
+
+| Parameter | Value |
+|-----------|-------|
+| Input Size | 640×640 (letterboxed) |
+| Batch Size | 16 |
+| Optimizer | AdamW |
+| Learning Rate | 0.001 |
+| Weight Decay | 5e-4 |
+| Scheduler | Linear Warmup → Cosine Annealing |
+| Warmup Epochs | 5 |
+| Warmup LR Factor | 0.01 |
+| Min LR | 1e-5 |
+| EMA Decay | 0.9999 |
+| Mixed Precision | (AMP + GradScaler) |
+| Num Workers | 4 (train) / 2 (val) |
+
+### Data Augmentations (Train)
+
+| Augmentation | Config |
+|-------------|--------|
+| HorizontalFlip | p=0.5 |
+| Affine (scale) | 0.5–1.5, p=0.5 |
+| Affine (translate) | ±10%, p=0.5 |
+| HueSaturationValue | H±20, S±30, V±30, p=0.5 |
+| RandomBrightnessContrast | ±0.2, p=0.5 |
+
+## TODO
+
+- [ ] Hyperparameter tuning
+  - [ ] Experiment with higher learning rates (e.g. 0.01, 0.005)
+  - [ ] Try SGD with momentum as an alternative to AdamW
+  - [ ] Test larger batch sizes (32, 64)
+  - [ ] Tune weight decay (1e-4, 1e-3)
+  - [ ] Adjust warmup epochs and cosine annealing schedule
+  - [ ] Try different augmentation strengths (Mosaic, MixUp)
+- [ ] Re-run training with best hyperparameters
+- [ ] Re-evaluate on MS COCO dataset and update results
