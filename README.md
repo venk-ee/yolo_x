@@ -75,3 +75,7 @@ python infer.py path/to/image.jpg
   - [ ] Try different augmentation strengths (Mosaic, MixUp)
 - [ ] Re-run training with best hyperparameters
 - [ ] Re-evaluate on MS COCO dataset and update results
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE) - see the [LICENSE](LICENSE) file for details.
