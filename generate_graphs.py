@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # Read CSV
 epochs, train_loss, val_loss, mAP, best_mAP, lr = [], [], [], [], [], []
-with open("assects/metrics.csv", "r") as f:
+with open("assets/metrics.csv", "r") as f:
     reader = csv.DictReader(f)
     for row in reader:
         if not row["epoch"].strip():
@@ -28,7 +28,7 @@ ax.set_title("Training & Validation Loss")
 ax.legend()
 ax.grid(True)
 plt.tight_layout()
-fig.savefig("assects/loss_curve.png", dpi=150)
+fig.savefig("assets/loss_curve.png", dpi=150)
 plt.close()
 print("Saved loss_curve.png")
 
@@ -42,7 +42,7 @@ ax.set_title("Mean Average Precision (mAP)")
 ax.legend()
 ax.grid(True)
 plt.tight_layout()
-fig.savefig("assects/map_curve.png", dpi=150)
+fig.savefig("assets/map_curve.png", dpi=150)
 plt.close()
 print("Saved map_curve.png")
 
@@ -54,7 +54,7 @@ ax.set_ylabel("Learning Rate")
 ax.set_title("Learning Rate Schedule")
 ax.grid(True)
 plt.tight_layout()
-fig.savefig("assects/lr_schedule.png", dpi=150)
+fig.savefig("assets/lr_schedule.png", dpi=150)
 plt.close()
 print("Saved lr_schedule.png")
 

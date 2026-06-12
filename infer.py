@@ -30,8 +30,8 @@ COLORS = [
 
 def parse_args():
     p = argparse.ArgumentParser(description="YOLO-X Inference")
-    p.add_argument("image", nargs="?", default="assects/image_for_infer_detected.jpg", help="Path to input image")
-    p.add_argument("--weights", default="assects/best_model.pth", help="Path to model weights")
+    p.add_argument("image", nargs="?", default="assets/image_for_infer.webp", help="Path to input image")
+    p.add_argument("--weights", default="assets/best_model.pth", help="Path to model weights")
     p.add_argument("--conf", type=float, default=0.25, help="Confidence threshold")
     p.add_argument("--iou", type=float, default=0.5, help="NMS IoU threshold")
     p.add_argument("--save", default=None, help="Output path (default: <name>_detected.jpg)")

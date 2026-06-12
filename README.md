@@ -8,15 +8,15 @@ The model was trained on the **Pascal VOC** dataset for **300 epochs**.
 
 ### Training & Validation Loss
 
-![Loss Curve](assects/loss_curve.png)
+![Loss Curve](assets/loss_curve.png)
 
 ### Mean Average Precision (mAP)
 
-![mAP Curve](assects/map_curve.png)
+![mAP Curve](assets/map_curve.png)
 
 ### Learning Rate Schedule
 
-![LR Schedule](assects/lr_schedule.png)
+![LR Schedule](assets/lr_schedule.png)
 
 ## Results
 
@@ -29,7 +29,7 @@ The model was trained on the **Pascal VOC** dataset for **300 epochs**.
 
 ## Inference
 
-![Detection Result](assects/image_for_infer_detected.jpg)
+![Detection Result](assets/image_for_infer_detected.jpg)
 
 ```bash
 #  usage
