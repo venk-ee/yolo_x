@@ -27,6 +27,16 @@ The model was trained on the **Pascal VOC** dataset for **300 epochs**.
 | Final Val Loss | 1.632 |
 | Total Epochs | 300 |
 
+## Inference
+
+![Detection Result](assects/image_for_infer_detected.jpg)
+
+```bash
+#  usage
+python infer.py path/to/image.jpg
+
+```
+
 ## Hyperparameters
 
 | Parameter | Value |
